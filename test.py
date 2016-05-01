@@ -2,7 +2,7 @@
 import time
 import functools
 import socket
-from event_loop import EventLoop
+from event_loop import EventLoop, EVENT_READ, EVENT_WRITE
 
 
 def on_connection(sock):
@@ -11,7 +11,7 @@ def on_connection(sock):
     
     loop = EventLoop.instance()
     callback = functools.partial(on_recieve, conn)
-    loop.register(conn.fileno(), 'r', callback)
+    loop.register(conn.fileno(), EVENT_READ, callback)
     
 def on_recieve(conn):
     data = conn.recv(1024)
@@ -29,12 +29,12 @@ def main():
 
     loop = EventLoop.instance()
     callback = functools.partial(on_connection, sock)
-    loop.register(sock.fileno(), "r", callback)
+    loop.register(sock.fileno(), EVENT_READ | EVENT_WRITE, callback)
 
     call_time = time.time() + 5
     loop.call_at(call_time, on_timeout)
-    stop_time = time.time() + 10
-    loop.call_at(stop_time, loop.stop)
+    # stop_time = time.time() + 10
+    # loop.call_at(stop_time, loop.stop)
 
     print("io loop start: ", time.time())
     loop.start()

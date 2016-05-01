@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import time
-import select
+import selectors
+
+EVENT_READ = selectors.EVENT_READ
+EVENT_WRITE = selectors.EVENT_WRITE
 
 class EventLoop(object):
     """A test event loop
@@ -9,17 +12,16 @@ class EventLoop(object):
     """
     __instance = None
 
-    @staticmethod
-    def instance():
-        if EventLoop.__instance is None:
-            EventLoop.__instance = EventLoop()
-            EventLoop.__instance.initialize()
-        return EventLoop.__instance
+    @classmethod
+    def instance(cls):
+        if cls.__instance is None:
+            cls.__instance = EventLoop()
+            cls.__instance.initialize()
+        return cls.__instance
 
     def initialize(self):
+        self.selector = selectors.DefaultSelector()
         self.__running = False
-        self.read_fds = set()
-        self.write_fds = set()
         self.handlers = {}
         self.timeouts = []
 
@@ -43,11 +45,9 @@ class EventLoop(object):
                 else:
                     break
 
-            readable, writable, errors = select.select(self.read_fds, self.write_fds, [], poll_timeout)
-            for item in readable:
-                self.handlers[item]()
-            for item in writable:
-                self.handlers[item]()
+            events = self.selector.select(poll_timeout)
+            for key, event in events:
+                self.handlers[key.fd]()
 
     def stop(self):
         self.__running = False
@@ -55,18 +55,13 @@ class EventLoop(object):
     def register(self, fd, event, callback):
         """Add fd in the event loop
         """
-        if event == "r":
-            self.read_fds.add(fd)
-        elif event == "w":
-            self.write_fds.add(fd)
+        self.selector.register(fd, event)
         self.handlers[fd] = callback
 
-    def unregister(self, fd, event):
+    def unregister(self, fd):
         """Remove fd from the event loop
         """
-        if event == "r":
-            self.read_rds.discard(fd)
-            self.handlers.remove(fd)
+        self.selector.unregister(fd)
 
     def call_at(self, call_time, callback):
         self.timeouts.append((call_time, callback))
