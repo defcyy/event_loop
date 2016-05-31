@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <strings.h>
@@ -56,6 +58,8 @@ int request_parser(int fd, char *header, size_t header_size, char *body, size_t 
     if (read_size < 0) {
         return -1;
     }
+
+    DEBUG_PRINT("Header -> \n%s\n", header);
 
     ret = regcomp(&regex, "\r\n\r\n", REG_EXTENDED);
     if (ret) {
@@ -130,7 +134,7 @@ int read_util_regex(int fd, const char *preg, char *buffer, int max_size) {
     return total_read;
 }
 
-int header_parser(const char *header, http_header headers) {
+int header_parser(const char *header, http_header *headers) {
     char prev_ch, ch;
     char line[MAX_HEADER_SIZE];
     bool first = true;
@@ -149,7 +153,7 @@ int header_parser(const char *header, http_header headers) {
             line[line_pos] = '\0';
             // line parser
             DEBUG_PRINT("get line -> %s\n", line);
-            header_line_parser(line, &headers, first);
+            header_line_parser(line, headers, first);
             line_pos = 0;
             first = false;
         }
@@ -163,8 +167,6 @@ int header_parser(const char *header, http_header headers) {
         }
         i++;
     }
-
-
 }
 
 void header_line_parser(const char *line, http_header *headers, bool first) {
@@ -242,6 +244,66 @@ void header_line_parser(const char *line, http_header *headers, bool first) {
     }
 }
 
+void serve_file(int client, char *path) {
+    FILE *fp = NULL;
+    char content[4096];
+    char buffer[1024];
+
+    if ((fp = fopen(path, "r")) == NULL) {
+        DEBUG_PRINT("file not found: %s\n", path);
+        response_404(client);
+    }
+    else {
+        sprintf(content, "HTTP/1.0 200 OK\r\n");
+        sprintf(content, "Server: %s\r\n", SERVER_STRING);
+        sprintf(content, "Content-Length: %d\r\n", (int)strlen(content));
+        sprintf(content, "Content-Type: text/html\r\n\r\n");
+        sprintf(content, buffer);
+        send(client, content, strlen(content), 0);
+        DEBUG_PRINT("--> %s\n", content);
+
+        fclose(fp);
+    }
+}
+
+void response_404(int client) {
+    char buffer[1024];
+    char *content = "<html><head><title>404<title></head><body>Not Found!</body></html>";
+
+    sprintf(buffer, "HTTP/1.0 404 NOT FOUND\r\nServer: %s\r\nContent-Type: text/html\r\nContent-Length: %d\r\n", SERVER_STRING, strlen(content));
+    send(client, buffer, strlen(buffer), 0);
+    send(client, content, strlen(content), 0);
+}
+
+void do_get(int client, http_header headers) {
+    struct stat st;
+    char path[1024];
+
+    sprintf(path, "%s%s", HTML_ROOT, headers.path);
+    if (stat(path, &st) == -1) {
+        DEBUG_PRINT("file not found: %s\n", path);
+        response_404(client);
+        return;
+    }
+
+    switch (st.st_mode & S_IFMT) {
+        case S_IFREG:
+            serve_file(client, path);
+            break;
+    }
+
+}
+
+void do_request(int client, http_header headers, char *body) {
+
+    if (strcmp(headers.method, "GET") == 0) {
+        do_get(client, headers);
+    }
+    else {
+        response_404(client);
+    }
+}
+
 
 void accept_request(void *connect) {
     int connect_sock = *(int *)connect;
@@ -260,17 +322,13 @@ void accept_request(void *connect) {
         return;
     }
 
-    fprintf(stdout, "header: -> \n");
-    fprintf(stdout, header);
-    fprintf(stdout, "\n");
-    fprintf(stdout, "body: -> \n");
-    fprintf(stdout, body);
-    fprintf(stdout, "\n");
-
     http_header headers;
-    header_parser(header, headers);
+    header_parser(header, &headers);
 
-    fflush(stdout);
+    DEBUG_PRINT("header: %s, %s\n", headers.method, headers.path);
+
+    do_request(connect_sock, headers, body);
+
     close(connect_sock);
 }
 

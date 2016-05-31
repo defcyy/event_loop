@@ -4,6 +4,9 @@
 #define MAX_HEADER_SIZE (1<<12)
 #define MAX_BODY_SIZE (1<<20)
 
+#define SERVER_STRING "micro http server"
+#define HTML_ROOT "html"
+
 #define DEBUG_PRINT(fmt, ...) \
     do { if (DEBUG) fprintf(stderr, fmt, __VA_ARGS__); } while (0)
 
