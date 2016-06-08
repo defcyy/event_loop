@@ -5,7 +5,7 @@ public class ArrayStackTest {
 
         ArrayStack<String> stack = new ArrayStack<String>();
 
-       String tmpStr;
+        String tmpStr;
         Scanner sc = new Scanner(System.in);
         while (sc.hasNextLine()) {
             tmpStr = sc.nextLine();
